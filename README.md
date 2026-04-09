@@ -1,4 +1,4 @@
-# Crispy ISP Dector
+# Crispy ISP Detector
 
 Distributed ISP quality monitor. Run a collector on your home machine or Raspberry Pi to continuously measure your ISP connection and push the data to a shared dashboard — giving them nowhere to hide.
 
