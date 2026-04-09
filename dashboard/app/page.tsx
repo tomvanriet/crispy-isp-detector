@@ -8,8 +8,19 @@ import PingChart from '@/app/components/PingChart'
 import SpeedChart from '@/app/components/SpeedChart'
 import LocationFilter from '@/app/components/LocationFilter'
 import RegionFilter from '@/app/components/RegionFilter'
+import TimeframeFilter from '@/app/components/TimeframeFilter'
+import { TIMEFRAMES, DEFAULT_TIMEFRAME } from '@/lib/timeframe'
+import type { Timeframe } from '@/lib/timeframe'
 
 const DEFAULT_REGION = 'Africa'
+
+const TIMEFRAME_MS: Record<Timeframe, number> = {
+  '1h': 1 * 60 * 60 * 1000,
+  '6h': 6 * 60 * 60 * 1000,
+  '24h': 24 * 60 * 60 * 1000,
+  '7d': 7 * 24 * 60 * 60 * 1000,
+  '30d': 30 * 24 * 60 * 60 * 1000,
+}
 
 function toDateTimeLabel(iso: string): string {
   const d = new Date(iso)
@@ -83,14 +94,15 @@ async function DashboardContent({
   collectors,
   location,
   region,
+  timeframe,
 }: {
   collectors: Collector[]
   location?: string
   region: string
+  timeframe: Timeframe
 }) {
   const supabase = createServerClient()
-  const since24h = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
-  const since7d = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()
+  const since = new Date(Date.now() - TIMEFRAME_MS[timeframe]).toISOString()
 
   const filteredCollectors = location
     ? collectors.filter((c) => c.location === location)
@@ -100,13 +112,13 @@ async function DashboardContent({
   let pingQuery = supabase
     .from('ping_results')
     .select('*')
-    .gte('created_at', since24h)
+    .gte('created_at', since)
     .order('created_at', { ascending: true })
 
   let speedQuery = supabase
     .from('speed_results')
     .select('*')
-    .gte('created_at', since7d)
+    .gte('created_at', since)
     .order('created_at', { ascending: false })
     .limit(200)
 
@@ -145,13 +157,13 @@ async function DashboardContent({
     <>
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-4 mb-8">
         <StatCard
-          label="Avg RTT (24h)"
+          label={`Avg RTT (${timeframe})`}
           value={avgRtt != null ? `${avgRtt} ms` : '—'}
           sub="across all targets"
           color="blue"
         />
         <StatCard
-          label="Packet Loss (24h)"
+          label={`Packet Loss (${timeframe})`}
           value={avgLoss != null ? `${avgLoss}%` : '—'}
           sub="avg across all probes"
           color={avgLoss != null && parseFloat(avgLoss) > 1 ? 'red' : 'green'}
@@ -159,13 +171,13 @@ async function DashboardContent({
         <StatCard
           label="Avg Download"
           value={avgDownload != null ? `${avgDownload} Mbps` : '—'}
-          sub="last 7 days"
+          sub={`last ${timeframe}`}
           color="green"
         />
         <StatCard
           label="Avg Upload"
           value={avgUpload != null ? `${avgUpload} Mbps` : '—'}
-          sub="last 7 days"
+          sub={`last ${timeframe}`}
           color="blue"
         />
       </div>
@@ -173,12 +185,12 @@ async function DashboardContent({
       <section className="mb-8 rounded-xl border border-white/10 bg-white/5 p-6">
         <div className="mb-4 flex items-baseline justify-between">
           <h2 className="font-semibold text-zinc-200">Ping RTT by Region</h2>
-          <span className="text-xs text-zinc-500">last 24 hours · hourly avg</span>
+          <span className="text-xs text-zinc-500">last {timeframe} · 30 min avg</span>
         </div>
         {pingChartData.length > 0 ? (
           <PingChart data={pingChartData} regions={regions} />
         ) : (
-          <p className="py-16 text-center text-sm text-zinc-600">No ping data in the last 24 hours</p>
+          <p className="py-16 text-center text-sm text-zinc-600">No ping data in the last {timeframe}</p>
         )}
       </section>
 
@@ -186,7 +198,7 @@ async function DashboardContent({
         <div className="mb-4 flex items-baseline justify-between">
           <h2 className="font-semibold text-zinc-200">Speed Tests</h2>
           <span className="text-xs text-zinc-500">
-            last 7 days
+            last {timeframe}
             {latestSpeed &&
               ` · latest: ↓${latestSpeed.download_mbps.toFixed(1)} / ↑${latestSpeed.upload_mbps.toFixed(1)} Mbps`}
           </span>
@@ -194,7 +206,7 @@ async function DashboardContent({
         {speedChartData.length > 0 ? (
           <SpeedChart data={speedChartData} />
         ) : (
-          <p className="py-16 text-center text-sm text-zinc-600">No speed test data in the last 7 days</p>
+          <p className="py-16 text-center text-sm text-zinc-600">No speed test data in the last {timeframe}</p>
         )}
       </section>
     </>
@@ -204,10 +216,13 @@ async function DashboardContent({
 export default async function Page({
   searchParams,
 }: {
-  searchParams: Promise<{ location?: string; region?: string }>
+  searchParams: Promise<{ location?: string; region?: string; timeframe?: string }>
 }) {
-  const { location, region: regionParam } = await searchParams
+  const { location, region: regionParam, timeframe: timeframeParam } = await searchParams
   const region = regionParam ?? DEFAULT_REGION
+  const timeframe: Timeframe = TIMEFRAMES.some((tf) => tf === timeframeParam)
+    ? (timeframeParam as Timeframe)
+    : DEFAULT_TIMEFRAME
 
   const supabase = createServerClient()
   const { data } = await supabase.from('collectors').select('*')
@@ -218,15 +233,16 @@ export default async function Page({
     <>
       <LocationFilter locations={locations} selected={location} />
       <RegionFilter selected={region} />
+      <TimeframeFilter selected={timeframe} />
       <Suspense
-        key={`${location}-${region}`}
+        key={`${location}-${region}-${timeframe}`}
         fallback={
           <div className="flex items-center justify-center py-32 text-sm text-zinc-500">
             Loading…
           </div>
         }
       >
-        <DashboardContent collectors={collectors} location={location} region={region} />
+        <DashboardContent collectors={collectors} location={location} region={region} timeframe={timeframe} />
       </Suspense>
     </>
   )
