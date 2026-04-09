@@ -78,6 +78,11 @@ export default function TopStatsClient({ initialPingData, initialSpeedData }: Pr
     }
   }, [location, region, pingTf, speedTf])
 
+  const pingScope = [
+    region !== 'all' ? region : 'all targets',
+    location ? `from ${location}` : null,
+  ].filter(Boolean).join(' · ')
+
   return (
     <div className="mb-6 grid grid-cols-4 gap-4">
       {speedPayload ? (
@@ -106,13 +111,13 @@ export default function TopStatsClient({ initialPingData, initialSpeedData }: Pr
           <StatCard
             label="Avg RTT"
             value={pingPayload.stats.avgRtt != null ? `${pingPayload.stats.avgRtt} ms` : '—'}
-            sub={`last ${pingTf} · across all targets`}
+            sub={`last ${pingTf} · across ${pingScope}`}
             color="blue"
           />
           <StatCard
             label="Packet Loss"
             value={pingPayload.stats.avgLoss != null ? `${pingPayload.stats.avgLoss}%` : '—'}
-            sub={`last ${pingTf} · avg across all probes`}
+            sub={`last ${pingTf} · avg across ${pingScope}`}
             color={pingPayload.stats.avgLoss != null && parseFloat(pingPayload.stats.avgLoss) > 1 ? 'red' : 'green'}
           />
         </>
