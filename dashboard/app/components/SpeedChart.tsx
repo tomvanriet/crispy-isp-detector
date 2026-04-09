@@ -22,15 +22,38 @@ export default function SpeedChart({ data }: Props) {
       <LineChart data={data} margin={{ top: 4, right: 16, left: 0, bottom: 0 }}>
         <CartesianGrid strokeDasharray="3 3" stroke="#ffffff0f" />
         <XAxis dataKey="time" tick={{ fill: '#71717a', fontSize: 11 }} />
-        <YAxis
-          unit=" Mbps"
-          tick={{ fill: '#71717a', fontSize: 11 }}
-          width={70}
-        />
+        <YAxis unit=" Mbps" tick={{ fill: '#71717a', fontSize: 11 }} width={70} />
         <Tooltip
-          contentStyle={{ background: '#18181b', border: '1px solid #ffffff1a', borderRadius: 8 }}
-          labelStyle={{ color: '#a1a1aa' }}
-          itemStyle={{ color: '#e4e4e7' }}
+          content={({ active, payload, label }) => {
+            if (!active || !payload?.length) return null
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const point = (payload[0] as any).payload as SpeedChartPoint
+            return (
+              <div className="rounded-lg border border-white/10 bg-zinc-900 p-3 text-xs shadow-xl min-w-[180px]">
+                <p className="mb-2 font-medium text-zinc-300">{label}</p>
+                <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-zinc-400">
+                  <span className="flex items-center gap-1.5">
+                    <span className="h-2 w-2 rounded-full bg-emerald-400" />
+                    Download
+                  </span>
+                  <span className="text-zinc-200 tabular-nums">{point.download} Mbps</span>
+                  <span className="flex items-center gap-1.5">
+                    <span className="h-2 w-2 rounded-full bg-sky-400" />
+                    Upload
+                  </span>
+                  <span className="text-zinc-200 tabular-nums">{point.upload} Mbps</span>
+                  <span>Latency</span>
+                  <span className="text-zinc-200 tabular-nums">{point.ping} ms</span>
+                  {point.server && (
+                    <>
+                      <span>Server</span>
+                      <span className="text-zinc-200 truncate max-w-[120px]">{point.server}</span>
+                    </>
+                  )}
+                </div>
+              </div>
+            )
+          }}
         />
         <Legend wrapperStyle={{ fontSize: 12, color: '#a1a1aa' }} />
         <Line

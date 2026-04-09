@@ -56,4 +56,6 @@ export interface SpeedChartPoint {
   time: string
   download: number
   upload: number
+  ping: number
+  server: string
 }

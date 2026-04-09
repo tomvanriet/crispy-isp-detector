@@ -2,36 +2,62 @@ export const dynamic = 'force-dynamic'
 
 import { Suspense } from 'react'
 import { createServerClient } from '@/lib/supabase'
-import type { PingResult, SpeedResult, PingChartPoint, SpeedChartPoint } from '@/lib/types'
+import type { Collector, PingResult, SpeedResult, PingChartPoint, SpeedChartPoint } from '@/lib/types'
 import StatCard from '@/app/components/StatCard'
 import PingChart from '@/app/components/PingChart'
 import SpeedChart from '@/app/components/SpeedChart'
+import LocationFilter from '@/app/components/LocationFilter'
+import RegionFilter from '@/app/components/RegionFilter'
+
+const DEFAULT_REGION = 'Africa'
 
 function toDateTimeLabel(iso: string): string {
   const d = new Date(iso)
-  return `${d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })} ${String(d.getHours()).padStart(2, '0')}:00`
+  const half = d.getMinutes() < 30 ? '00' : '30'
+  return `${d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })} ${String(d.getHours()).padStart(2, '0')}:${half}`
+}
+
+interface PingBucket {
+  avg: number[]
+  min: number[]
+  max: number[]
+  jitter: number[]
+  loss: number[]
 }
 
 function buildPingChartData(rows: PingResult[]): { data: PingChartPoint[]; regions: string[] } {
   const regions = [...new Set(rows.map((r) => r.target_region))].sort()
-  const buckets = new Map<string, Map<string, number[]>>()
+  const buckets = new Map<string, Map<string, PingBucket>>()
 
   for (const row of rows) {
     const bucket = toDateTimeLabel(row.created_at)
     if (!buckets.has(bucket)) buckets.set(bucket, new Map())
     const regionMap = buckets.get(bucket)!
-    if (!regionMap.has(row.target_region)) regionMap.set(row.target_region, [])
-    regionMap.get(row.target_region)!.push(row.rtt_avg)
+    if (!regionMap.has(row.target_region)) {
+      regionMap.set(row.target_region, { avg: [], min: [], max: [], jitter: [], loss: [] })
+    }
+    const b = regionMap.get(row.target_region)!
+    b.avg.push(row.rtt_avg)
+    b.min.push(row.rtt_min)
+    b.max.push(row.rtt_max)
+    b.jitter.push(row.rtt_mdev)
+    b.loss.push(row.packet_loss)
   }
+
+  const avg = (arr: number[]) => arr.reduce((a, b) => a + b, 0) / arr.length
 
   const data: PingChartPoint[] = [...buckets.entries()]
     .sort(([a], [b]) => a.localeCompare(b))
     .map(([time, regionMap]) => {
       const point: PingChartPoint = { time }
       for (const region of regions) {
-        const vals = regionMap.get(region)
-        if (vals && vals.length > 0) {
-          point[region] = Math.round(vals.reduce((a, b) => a + b, 0) / vals.length)
+        const b = regionMap.get(region)
+        if (b && b.avg.length > 0) {
+          point[region] = Math.round(avg(b.avg))
+          point[`${region}_min`] = Math.round(Math.min(...b.min))
+          point[`${region}_max`] = Math.round(Math.max(...b.max))
+          point[`${region}_jitter`] = Math.round(avg(b.jitter) * 10) / 10
+          point[`${region}_loss`] = Math.round(avg(b.loss) * 10) / 10
         }
       }
       return point
@@ -48,32 +74,55 @@ function buildSpeedChartData(rows: SpeedResult[]): SpeedChartPoint[] {
       time: toDateTimeLabel(r.created_at),
       download: Math.round(r.download_mbps * 10) / 10,
       upload: Math.round(r.upload_mbps * 10) / 10,
+      ping: Math.round(r.ping_ms),
+      server: r.server_name ?? '',
     }))
 }
 
-async function DashboardContent() {
+async function DashboardContent({
+  collectors,
+  location,
+  region,
+}: {
+  collectors: Collector[]
+  location?: string
+  region: string
+}) {
   const supabase = createServerClient()
   const since24h = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
   const since7d = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()
 
-  const [pingRes, speedRes, collectorsRes] = await Promise.all([
-    supabase
-      .from('ping_results')
-      .select('*')
-      .gte('created_at', since24h)
-      .order('created_at', { ascending: true }),
-    supabase
-      .from('speed_results')
-      .select('*')
-      .gte('created_at', since7d)
-      .order('created_at', { ascending: false })
-      .limit(200),
-    supabase.from('collectors').select('*'),
-  ])
+  const filteredCollectors = location
+    ? collectors.filter((c) => c.location === location)
+    : collectors
+  const collectorIds = filteredCollectors.map((c) => c.id)
+
+  let pingQuery = supabase
+    .from('ping_results')
+    .select('*')
+    .gte('created_at', since24h)
+    .order('created_at', { ascending: true })
+
+  let speedQuery = supabase
+    .from('speed_results')
+    .select('*')
+    .gte('created_at', since7d)
+    .order('created_at', { ascending: false })
+    .limit(200)
+
+  if (location && collectorIds.length > 0) {
+    pingQuery = pingQuery.in('collector_id', collectorIds)
+    speedQuery = speedQuery.in('collector_id', collectorIds)
+  }
+
+  if (region !== 'all') {
+    pingQuery = pingQuery.eq('target_region', region)
+  }
+
+  const [pingRes, speedRes] = await Promise.all([pingQuery, speedQuery])
 
   const pings: PingResult[] = pingRes.data ?? []
   const speeds: SpeedResult[] = speedRes.data ?? []
-  const collectors = collectorsRes.data ?? []
 
   const avgRtt = pings.length
     ? Math.round(pings.reduce((s, r) => s + r.rtt_avg, 0) / pings.length)
@@ -94,19 +143,6 @@ async function DashboardContent() {
 
   return (
     <>
-      {collectors.length > 0 && (
-        <div className="mb-6 flex flex-wrap gap-2">
-          {collectors.map((c) => (
-            <span
-              key={c.id}
-              className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs text-zinc-400"
-            >
-              {c.name} · {c.isp} · {c.location}
-            </span>
-          ))}
-        </div>
-      )}
-
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-4 mb-8">
         <StatCard
           label="Avg RTT (24h)"
@@ -165,16 +201,33 @@ async function DashboardContent() {
   )
 }
 
-export default function Page() {
+export default async function Page({
+  searchParams,
+}: {
+  searchParams: Promise<{ location?: string; region?: string }>
+}) {
+  const { location, region: regionParam } = await searchParams
+  const region = regionParam ?? DEFAULT_REGION
+
+  const supabase = createServerClient()
+  const { data } = await supabase.from('collectors').select('*')
+  const collectors: Collector[] = data ?? []
+  const locations = [...new Set(collectors.map((c) => c.location))].sort()
+
   return (
-    <Suspense
-      fallback={
-        <div className="flex items-center justify-center py-32 text-sm text-zinc-500">
-          Loading dashboard…
-        </div>
-      }
-    >
-      <DashboardContent />
-    </Suspense>
+    <>
+      <LocationFilter locations={locations} selected={location} />
+      <RegionFilter selected={region} />
+      <Suspense
+        key={`${location}-${region}`}
+        fallback={
+          <div className="flex items-center justify-center py-32 text-sm text-zinc-500">
+            Loading…
+          </div>
+        }
+      >
+        <DashboardContent collectors={collectors} location={location} region={region} />
+      </Suspense>
+    </>
   )
 }
