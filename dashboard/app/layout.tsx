@@ -17,7 +17,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <header className="border-b border-white/10 px-6 py-4">
           <div className="mx-auto flex max-w-7xl items-center gap-3">
             <span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
-            <h1 className="text-sm font-semibold tracking-wide text-zinc-200">CRISP DECTOR</h1>
+            <h1 className="text-sm font-semibold tracking-wide text-zinc-200">CRISPY DETECTOR</h1>
             <span className="text-zinc-600 text-sm">ISP Quality Monitor</span>
           </div>
         </header>
