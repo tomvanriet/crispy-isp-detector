@@ -5,6 +5,7 @@ import { fetchPingPayload, fetchSpeedPayload } from '@/lib/data'
 import LocationFilter from '@/app/components/LocationFilter'
 import RegionFilter from '@/app/components/RegionFilter'
 import TimeframeFilter from '@/app/components/TimeframeFilter'
+import TopStatsClient from '@/app/components/TopStatsClient'
 import PingSectionClient from '@/app/components/PingSectionClient'
 import SpeedSectionClient from '@/app/components/SpeedSectionClient'
 import { TIMEFRAMES, DEFAULT_TIMEFRAME } from '@/lib/timeframe'
@@ -23,15 +24,17 @@ export default async function Page({
     region?: string
     timeframe?: string
     pingTf?: string
+    lossTf?: string
     speedTf?: string
   }>
 }) {
-  const { location, region: regionParam, timeframe: tfParam, pingTf: pingTfParam, speedTf: speedTfParam } =
+  const { location, region: regionParam, timeframe: tfParam, pingTf: pingTfParam, lossTf: lossTfParam, speedTf: speedTfParam } =
     await searchParams
 
   const region = regionParam ?? 'Africa'
   const timeframe = resolveTimeframe(tfParam, DEFAULT_TIMEFRAME)
   const pingTf = resolveTimeframe(pingTfParam, timeframe)
+  const lossTf = resolveTimeframe(lossTfParam, timeframe)
   const speedTf = resolveTimeframe(speedTfParam, timeframe)
 
   const supabase = createServerClient()
@@ -41,8 +44,9 @@ export default async function Page({
 
   // Fetch initial data server-side so the page renders with content immediately.
   // The client components take over and re-fetch independently when filters change.
-  const [initialPingData, initialSpeedData] = await Promise.all([
+  const [initialPingData, initialLossData, initialSpeedData] = await Promise.all([
     fetchPingPayload(location, region, pingTf, collectors),
+    fetchPingPayload(location, region, lossTf, collectors),
     fetchSpeedPayload(location, speedTf, collectors),
   ])
 
@@ -54,10 +58,11 @@ export default async function Page({
           {locations.length > 1 && <span className="mx-1 h-4 w-px bg-white/10" />}
           <RegionFilter selected={region} />
         </div>
-        <TimeframeFilter selected={timeframe} clearParams={['pingTf', 'speedTf']} subParams={['pingTf', 'speedTf']} />
+        <TimeframeFilter selected={timeframe} clearParams={['pingTf', 'lossTf', 'speedTf']} subParams={['pingTf', 'lossTf', 'speedTf']} />
       </div>
 
-      <PingSectionClient initialData={initialPingData} />
+      <TopStatsClient initialPingData={initialPingData} initialSpeedData={initialSpeedData} />
+      <PingSectionClient initialData={initialPingData} initialLossData={initialLossData} />
       <SpeedSectionClient initialData={initialSpeedData} />
     </>
   )

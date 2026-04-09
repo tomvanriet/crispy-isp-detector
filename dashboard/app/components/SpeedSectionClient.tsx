@@ -3,7 +3,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
 import SpeedChart from '@/app/components/SpeedChart'
-import StatCard from '@/app/components/StatCard'
 import TimeframeFilter from '@/app/components/TimeframeFilter'
 import { TIMEFRAMES, DEFAULT_TIMEFRAME } from '@/lib/timeframe'
 import type { Timeframe } from '@/lib/timeframe'
@@ -11,16 +10,6 @@ import type { SpeedPayload } from '@/lib/data'
 
 interface Props {
   initialData: SpeedPayload
-}
-
-function StatCardSkeleton() {
-  return (
-    <div className="animate-pulse rounded-xl border border-white/10 bg-white/5 p-5">
-      <div className="h-3.5 w-16 rounded bg-white/10" />
-      <div className="mt-2 h-9 w-28 rounded bg-white/10" />
-      <div className="mt-2 h-3 w-36 rounded bg-white/10" />
-    </div>
-  )
 }
 
 export default function SpeedSectionClient({ initialData }: Props) {
@@ -62,29 +51,6 @@ export default function SpeedSectionClient({ initialData }: Props) {
 
   return (
     <div>
-      <div className="mb-6 grid grid-cols-2 gap-4">
-        {payload ? (
-          <>
-            <StatCard
-              label="Avg Download"
-              value={payload.stats.avgDownload != null ? `${payload.stats.avgDownload} Mbps` : '—'}
-              sub={`last ${speedTf}`}
-              color="green"
-            />
-            <StatCard
-              label="Avg Upload"
-              value={payload.stats.avgUpload != null ? `${payload.stats.avgUpload} Mbps` : '—'}
-              sub={`last ${speedTf}`}
-              color="blue"
-            />
-          </>
-        ) : (
-          <>
-            <StatCardSkeleton />
-            <StatCardSkeleton />
-          </>
-        )}
-      </div>
       <section className="rounded-xl border border-white/10 bg-white/5 p-6">
         <div className="mb-4 flex items-center justify-between gap-4">
           <div>
