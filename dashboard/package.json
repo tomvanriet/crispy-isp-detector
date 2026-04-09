@@ -32,5 +32,8 @@
   "trustedDependencies": [
     "sharp",
     "unrs-resolver"
-  ]
+  ],
+  "engines": {
+    "node": "20.x"
+  }
 }
