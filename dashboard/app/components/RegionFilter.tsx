@@ -11,26 +11,27 @@ interface Props {
 
 export default function RegionFilter({ selected }: Props) {
   const searchParams = useSearchParams()
+  // Read from URL directly for immediate active state update on click.
+  // Falls back to server-resolved `selected` when the param is absent.
+  const active = searchParams.get('region') ?? selected
 
   const buildHref = (region: string) => {
     const params = new URLSearchParams(searchParams.toString())
-    if (region === 'All') {
-      params.delete('region')
-      params.set('region', 'all')
-    } else {
-      params.set('region', region)
-    }
+    params.set('region', region === 'All' ? 'all' : region)
     return `/?${params.toString()}`
   }
 
   return (
-    <div className="mb-6 flex flex-wrap gap-2">
+    <div className="flex flex-wrap gap-2">
       {REGIONS.map((r) => {
-        const isActive = r === 'All' ? selected === 'all' : selected === r
+        const isActive = r === 'All' ? active === 'all' : active === r
         return (
           <Link
             key={r}
             href={buildHref(r)}
+            replace
+            scroll={false}
+            prefetch={false}
             className={`rounded-full border px-3 py-1 text-xs transition-colors ${
               isActive
                 ? 'border-amber-500 bg-amber-500/10 text-amber-400'

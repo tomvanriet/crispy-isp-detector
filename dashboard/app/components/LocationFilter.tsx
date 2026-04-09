@@ -10,6 +10,9 @@ interface Props {
 
 export default function LocationFilter({ locations, selected }: Props) {
   const searchParams = useSearchParams()
+  // Read from URL directly for immediate active state update on click.
+  // Falls back to server-resolved `selected` when the param is absent.
+  const active = searchParams.get('location') ?? selected
 
   if (locations.length <= 1) return null
 
@@ -25,11 +28,14 @@ export default function LocationFilter({ locations, selected }: Props) {
   }
 
   return (
-    <div className="mb-4 flex flex-wrap gap-2">
+    <div className="flex flex-wrap gap-2">
       <Link
         href={buildHref(null)}
+        replace
+        scroll={false}
+        prefetch={false}
         className={`rounded-full border px-3 py-1 text-xs transition-colors ${
-          !selected
+          !active
             ? 'border-sky-500 bg-sky-500/10 text-sky-400'
             : 'border-white/10 bg-white/5 text-zinc-400 hover:border-white/20 hover:text-zinc-300'
         }`}
@@ -40,8 +46,11 @@ export default function LocationFilter({ locations, selected }: Props) {
         <Link
           key={loc}
           href={buildHref(loc)}
+          replace
+          scroll={false}
+          prefetch={false}
           className={`rounded-full border px-3 py-1 text-xs transition-colors ${
-            selected === loc
+            active === loc
               ? 'border-sky-500 bg-sky-500/10 text-sky-400'
               : 'border-white/10 bg-white/5 text-zinc-400 hover:border-white/20 hover:text-zinc-300'
           }`}
