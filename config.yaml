@@ -1,0 +1,61 @@
+# Ping probe settings
+ping:
+  count: 5         # ICMP packets per probe
+  timeout: 10      # seconds per probe
+  interval: 60     # seconds between probe rounds
+
+# Traceroute settings
+traceroute:
+  enabled: true
+  count: 5         # packets per hop (mtr -c)
+  interval: 900    # seconds between runs (15 min)
+
+# Speed test settings (uses bandwidth — keep interval high)
+speedtest:
+  enabled: true
+  interval: 1800   # seconds between tests (30 min)
+
+# Targets per continent — customise for your location
+# These should be unicast (non-anycast) where possible so RTT
+# reflects true geographic distance, not nearest CDN edge.
+targets:
+  # Global (Anycast)
+  - host: "1.1.1.1"
+    label: "Cloudflare DNS"
+    region: "Global"
+  - host: "8.8.8.8"
+    label: "Google DNS"
+    region: "Global"
+
+  # Africa
+  - host: "196.25.1.1"
+    label: "Telkom DNS (South Africa)"
+    region: "Africa"
+
+  # Europe
+  - host: "77.88.8.1"
+    label: "Yandex DNS (Russia)"
+    region: "Europe"
+  - host: "194.242.2.2"
+    label: "Mullvad DNS (Sweden)"
+    region: "Europe"
+
+  # North America
+  - host: "128.59.1.1"
+    label: "Columbia University DNS (United States)"
+    region: "North America"
+
+  # South America
+  - host: "200.160.0.8"
+    label: "DNS.br (Brazil)"
+    region: "South America"
+
+  # Asia
+  - host: "168.126.63.1"
+    label: "Korea Telecom DNS (South Korea)"
+    region: "Asia"
+
+  # Oceania
+  - host: "203.119.1.1"
+    label: "APNIC DNS (Australia)"
+    region: "Oceania"

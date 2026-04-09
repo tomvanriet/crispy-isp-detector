@@ -1,0 +1,244 @@
+{
+  "editable": true,
+  "graphTooltip": 1,
+  "id": null,
+  "links": [],
+  "schemaVersion": 39,
+  "tags": ["isp", "monitoring", "crispy-isp-detector"],
+  "title": "Crispy ISP Dector — ISP Monitor",
+  "uid": "crispy-isp-detector",
+  "time": { "from": "now-24h", "to": "now" },
+  "refresh": "1m",
+  "templating": {
+    "list": [
+      {
+        "name": "ds",
+        "type": "datasource",
+        "query": "postgres",
+        "current": {},
+        "label": "Data Source"
+      },
+      {
+        "name": "location",
+        "type": "query",
+        "datasource": { "type": "postgres", "uid": "${ds}" },
+        "query": "SELECT DISTINCT location FROM collectors ORDER BY location;",
+        "refresh": 1,
+        "includeAll": true,
+        "multi": true,
+        "current": { "text": "All", "value": "$__all" }
+      },
+      {
+        "name": "collector",
+        "type": "query",
+        "datasource": { "type": "postgres", "uid": "${ds}" },
+        "query": "SELECT name FROM collectors WHERE location IN ($location) ORDER BY name;",
+        "refresh": 1,
+        "includeAll": true,
+        "multi": true,
+        "current": { "text": "All", "value": "$__all" }
+      },
+      {
+        "name": "region",
+        "type": "query",
+        "datasource": { "type": "postgres", "uid": "${ds}" },
+        "query": "SELECT DISTINCT target_region FROM ping_results ORDER BY target_region;",
+        "refresh": 1,
+        "includeAll": true,
+        "multi": true,
+        "current": { "text": "All", "value": "$__all" }
+      },
+      {
+        "name": "target",
+        "type": "query",
+        "datasource": { "type": "postgres", "uid": "${ds}" },
+        "query": "SELECT DISTINCT target_label FROM ping_results WHERE target_region IN ($region) ORDER BY target_label;",
+        "refresh": 1,
+        "includeAll": true,
+        "multi": true,
+        "current": { "text": "All", "value": "$__all" },
+        "label": "Target"
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "type": "barchart",
+      "title": "Average RTT by Selected Regions",
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 0 },
+      "datasource": { "type": "postgres", "uid": "${ds}" },
+      "targets": [{
+        "rawSql": "SELECT target_region AS \"Region\", round(avg(rtt_avg)::numeric, 1) AS \"Avg RTT (ms)\" FROM ping_results WHERE $__timeFilter(created_at) AND collector_id IN (SELECT id FROM collectors WHERE name IN ($collector) AND location IN ($location)) AND target_region IN ($region) AND target_label IN ($target) AND rtt_avg IS NOT NULL GROUP BY target_region ORDER BY \"Avg RTT (ms)\" DESC;",
+        "format": "table",
+        "refId": "A"
+      }],
+      "fieldConfig": { "defaults": { "unit": "ms", "color": { "mode": "palette-classic" } } },
+      "options": { "xField": "Region" }
+    },
+    {
+      "id": 2,
+      "type": "stat",
+      "title": "Packet Loss (1h)",
+      "gridPos": { "h": 4, "w": 8, "x": 0, "y": 8 },
+      "datasource": { "type": "postgres", "uid": "${ds}" },
+      "targets": [{
+        "rawSql": "SELECT avg(packet_loss) AS \"Avg Loss\" FROM ping_results WHERE created_at > now() - interval '1 hour' AND collector_id IN (SELECT id FROM collectors WHERE name IN ($collector) AND location IN ($location)) AND target_region IN ($region) AND target_label IN ($target);",
+        "format": "table",
+        "refId": "A"
+      }],
+      "fieldConfig": {
+        "defaults": { "unit": "percent", "thresholds": { "steps": [
+          { "color": "green", "value": null },
+          { "color": "yellow", "value": 1 },
+          { "color": "red", "value": 5 }
+        ]}}
+      }
+    },
+    {
+      "id": 3,
+      "type": "stat",
+      "title": "Download (latest)",
+      "gridPos": { "h": 4, "w": 8, "x": 8, "y": 8 },
+      "datasource": { "type": "postgres", "uid": "${ds}" },
+      "targets": [{
+        "rawSql": "SELECT download_mbps AS \"Download\" FROM speed_results WHERE collector_id IN (SELECT id FROM collectors WHERE name IN ($collector) AND location IN ($location)) ORDER BY created_at DESC LIMIT 1;",
+        "format": "table",
+        "refId": "A"
+      }],
+      "fieldConfig": {
+        "defaults": { "unit": "Mbps", "thresholds": { "steps": [
+          { "color": "red", "value": null },
+          { "color": "yellow", "value": 10 },
+          { "color": "green", "value": 50 }
+        ]}}
+      }
+    },
+    {
+      "id": 4,
+      "type": "stat",
+      "title": "Upload (latest)",
+      "gridPos": { "h": 4, "w": 8, "x": 16, "y": 8 },
+      "datasource": { "type": "postgres", "uid": "${ds}" },
+      "targets": [{
+        "rawSql": "SELECT upload_mbps AS \"Upload\" FROM speed_results WHERE collector_id IN (SELECT id FROM collectors WHERE name IN ($collector) AND location IN ($location)) ORDER BY created_at DESC LIMIT 1;",
+        "format": "table",
+        "refId": "A"
+      }],
+      "fieldConfig": {
+        "defaults": { "unit": "Mbps", "thresholds": { "steps": [
+          { "color": "red", "value": null },
+          { "color": "yellow", "value": 5 },
+          { "color": "green", "value": 20 }
+        ]}}
+      }
+    },
+    {
+      "id": 10,
+      "type": "timeseries",
+      "title": "RTT Average over Time",
+      "gridPos": { "h": 9, "w": 24, "x": 0, "y": 12 },
+      "datasource": { "type": "postgres", "uid": "${ds}" },
+      "targets": [{
+        "rawSql": "SELECT created_at AS \"time\", rtt_avg AS \"value\", target_label || ' (' || target_region || ')' AS \"metric\" FROM ping_results WHERE $__timeFilter(created_at) AND collector_id IN (SELECT id FROM collectors WHERE name IN ($collector) AND location IN ($location)) AND target_region IN ($region) AND target_label IN ($target) AND rtt_avg IS NOT NULL ORDER BY created_at;",
+        "format": "time_series",
+        "refId": "A"
+      }],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ms",
+          "custom": { "drawStyle": "line", "lineWidth": 1, "fillOpacity": 8, "pointSize": 3, "showPoints": "never" }
+        }
+      },
+      "options": { "tooltip": { "mode": "multi" }, "legend": { "displayMode": "table", "placement": "right", "calcs": ["mean", "max"] } }
+    },
+    {
+      "id": 11,
+      "type": "timeseries",
+      "title": "Packet Loss over Time",
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 21 },
+      "datasource": { "type": "postgres", "uid": "${ds}" },
+      "targets": [{
+        "rawSql": "SELECT created_at AS \"time\", packet_loss AS \"value\", target_label || ' (' || target_region || ')' AS \"metric\" FROM ping_results WHERE $__timeFilter(created_at) AND collector_id IN (SELECT id FROM collectors WHERE name IN ($collector) AND location IN ($location)) AND target_region IN ($region) AND target_label IN ($target) ORDER BY created_at;",
+        "format": "time_series",
+        "refId": "A"
+      }],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "min": 0,
+          "custom": { "drawStyle": "line", "lineWidth": 1, "fillOpacity": 15 },
+          "thresholds": { "mode": "absolute", "steps": [
+            { "color": "green", "value": null },
+            { "color": "yellow", "value": 1 },
+            { "color": "red", "value": 5 }
+          ]},
+          "color": { "mode": "palette-classic" }
+        }
+      },
+      "options": { "tooltip": { "mode": "multi" }, "legend": { "displayMode": "table", "placement": "right", "calcs": ["mean", "max"] } }
+    },
+    {
+      "id": 12,
+      "type": "timeseries",
+      "title": "Speed Tests over Time",
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 29 },
+      "datasource": { "type": "postgres", "uid": "${ds}" },
+      "targets": [
+        {
+          "rawSql": "SELECT created_at AS \"time\", download_mbps AS \"Download (Mbps)\" FROM speed_results WHERE $__timeFilter(created_at) AND collector_id IN (SELECT id FROM collectors WHERE name IN ($collector) AND location IN ($location)) ORDER BY created_at;",
+          "format": "time_series",
+          "refId": "A"
+        },
+        {
+          "rawSql": "SELECT created_at AS \"time\", upload_mbps AS \"Upload (Mbps)\" FROM speed_results WHERE $__timeFilter(created_at) AND collector_id IN (SELECT id FROM collectors WHERE name IN ($collector) AND location IN ($location)) ORDER BY created_at;",
+          "format": "time_series",
+          "refId": "B"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "Mbps",
+          "custom": { "drawStyle": "line", "lineWidth": 2, "fillOpacity": 15, "pointSize": 5, "showPoints": "always" }
+        }
+      },
+      "options": { "tooltip": { "mode": "multi" }, "legend": { "displayMode": "list", "placement": "bottom" } }
+    },
+    {
+      "id": 14,
+      "type": "barchart",
+      "title": "Traceroute — Per-Hop Latency Breakdown",
+      "description": "Each segment shows the incremental RTT added by that hop. Total bar length ≈ end-to-end RTT.",
+      "gridPos": { "h": 10, "w": 24, "x": 0, "y": 37 },
+      "datasource": { "type": "postgres", "uid": "${ds}" },
+      "targets": [{
+        "rawSql": "WITH latest AS ( SELECT target_host, max(created_at) AS ts FROM traceroute_results WHERE collector_id IN (SELECT id FROM collectors WHERE name IN ($collector) AND location IN ($location)) AND target_region IN ($region) AND target_label IN ($target) GROUP BY target_host ), hops AS ( SELECT t.target_label, t.hop_number, t.rtt_avg, COALESCE(LAG(t.rtt_avg) OVER (PARTITION BY t.target_label ORDER BY t.hop_number), 0) AS prev_rtt FROM traceroute_results t JOIN latest l ON t.target_host = l.target_host AND t.created_at = l.ts WHERE t.collector_id IN (SELECT id FROM collectors WHERE name IN ($collector) AND location IN ($location)) AND t.target_region IN ($region) AND t.target_label IN ($target) AND t.rtt_avg IS NOT NULL ) SELECT target_label AS \"Target\", 'Hop ' || lpad(hop_number::text, 2, '0') AS \"Hop\", round(GREATEST(rtt_avg - prev_rtt, 0)::numeric, 1) AS \"Added RTT (ms)\" FROM hops ORDER BY target_label, hop_number;",
+        "format": "table",
+        "refId": "A"
+      }],
+      "transformations": [
+        {
+          "id": "groupingToMatrix",
+          "options": {
+            "columnField": "Hop",
+            "rowField": "Target",
+            "valueField": "Added RTT (ms)"
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ms",
+          "custom": { "stacking": { "mode": "normal" }, "fillOpacity": 80 },
+          "color": { "mode": "palette-classic" }
+        }
+      },
+      "options": {
+        "orientation": "horizontal",
+        "barWidth": 0.7,
+        "legend": { "displayMode": "list", "placement": "right" },
+        "tooltip": { "mode": "multi", "sort": "asc" }
+      }
+    }
+  ]
+}
