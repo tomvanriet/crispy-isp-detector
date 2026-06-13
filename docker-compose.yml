@@ -2,6 +2,7 @@ services:
   collector:
     build: .
     restart: unless-stopped
+    init: true
     env_file: .env
     volumes:
       - ./config.yaml:/app/config.yaml:ro
